@@ -91,3 +91,21 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+extern int set_priority(int pid, int priority);
+extern int set_boost(int pid, int boost);
+
+
+uint64 sys_setpriority(void) {
+    int pid, priority;
+    argint(0, &pid);
+    argint(1, &priority);
+    return (uint64)set_priority(pid, priority);
+}
+
+uint64 sys_setboost(void) {
+    int pid, boost;
+    argint(0, &pid);
+    argint(1, &boost);
+    return (uint64)set_boost(pid, boost);
+}

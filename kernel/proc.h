@@ -95,6 +95,9 @@ struct proc {
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 
+  int priority;  // Prioridad del proceso
+  int boost;     // Boost del proceso
+
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
@@ -105,3 +108,12 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+struct ptable_struct {
+    struct spinlock lock;
+    struct proc proc[NPROC];
+};
+extern struct ptable_struct ptable;
+
+int set_priority(int pid, int priority);
+int set_boost(int pid, int boost);

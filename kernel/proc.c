@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "defs.h"
 
+struct ptable_struct ptable;
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -458,6 +460,16 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
+        // Ajustar la prioridad por el boost
+        p->priority += p->boost;
+
+        // Cambiar el valor de boost si la prioridad alcanza 0 o 9
+        if (p->priority >= 9) {
+          p->boost = -1;
+        } else if (p->priority <= 0) {
+          p->boost = 1;
+        }
+
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
@@ -472,6 +484,7 @@ scheduler(void)
       }
       release(&p->lock);
     }
+
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
       intr_on();
@@ -692,4 +705,33 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+
+int set_priority(int pid, int priority) {
+    struct proc *p;
+    for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);  // Adquirir el bloqueo del proceso
+        if(p->pid == pid) {
+            p->priority = priority;  // Asignar la nueva prioridad
+            release(&p->lock);       // Liberar el bloqueo del proceso
+            return 0;                // Éxito
+        }
+        release(&p->lock);  // Liberar el bloqueo si no coincide el pid
+    }
+    return -1;  // Error: No se encontró el proceso con el pid especificado
+}
+
+int set_boost(int pid, int boost) {
+    struct proc *p;
+    for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);  // Adquirir el bloqueo del proceso
+        if(p->pid == pid) {
+            p->boost = boost;  // Asignar el nuevo valor de boost
+            release(&p->lock);  // Liberar el bloqueo del proceso
+            return 0;           // Éxito
+        }
+        release(&p->lock);  // Liberar el bloqueo si no coincide el pid
+    }
+    return -1;  // Error: No se encontró el proceso con el pid especificado
 }
