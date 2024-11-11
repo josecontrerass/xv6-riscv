@@ -143,8 +143,8 @@ El objetivo principal es implementar un sistema de protección de memoria en xv6
 - Salida esperada: Al intentar escribir en una página protegida, se muestra un mensaje de error similar a
     ```
     Memoria asignada en la dirección 0x0000000000004000
-    mprotect fue exitoso: página en 0x0000000000004000 ahora es de solo lectura.
-    Intentando escribir en la página protegida en 0x0000000000004000...
+    mprotect exitoso: la página es de solo lectura.
+    Intentando escribir en la página protegida...
     ```
 
     ```
