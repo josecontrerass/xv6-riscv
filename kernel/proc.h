@@ -117,3 +117,8 @@ extern struct ptable_struct ptable;
 
 int set_priority(int pid, int priority);
 int set_boost(int pid, int boost);
+
+
+//Declaración de las nuevas funciones para evitar problemas de referencia y facil manejo
+int mprotect(void *addr, int len);
+int munprotect(void *addr, int len);

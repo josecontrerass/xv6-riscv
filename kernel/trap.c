@@ -65,7 +65,10 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  } else if (r_scause() == 15) {  // Código 15 indica una excepción de página protegida en RISC-V
+    printf("Intento de escritura en página de solo lectura. PID=%d\n", p->pid);
+    p->killed = 1;  // Marca el proceso como terminado debido a acceso no permitido
+  } else if ((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);

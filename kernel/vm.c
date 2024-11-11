@@ -5,6 +5,9 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"  // Corrección de errores arrojados por consola spinlock.h 
+#include "proc.h"
+
 
 /*
  * the kernel's page table.
@@ -448,4 +451,40 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int mprotect(void *addr, int len) {
+    if (addr == 0 || len <= 0) return -1;  // Validación de argumentos
+
+    uint64 addr_aligned = PGROUNDDOWN((uint64) addr);  // Alinear dirección al inicio de página
+    uint64 end_addr = (uint64) addr + len * PGSIZE;    // Dirección final de la región
+
+    for (uint64 a = addr_aligned; a < end_addr; a += PGSIZE) {
+        pte_t *pte = walk(myproc()->pagetable, a, 0);  // Obtención de la PTE sin crear una nueva
+        if (!pte || (*pte & PTE_V) == 0)  // Verificar que PTE es válida y presente
+            return -1;
+
+        *pte &= ~PTE_W;  // Desactivar el bit de escritura para solo lectura
+    }
+
+    sfence_vma();  // Recargar TLB en RISC-V
+    return 0;
+}
+
+int munprotect(void *addr, int len) {
+    if (addr == 0 || len <= 0) return -1;  // Validación de argumentos
+
+    uint64 addr_aligned = PGROUNDDOWN((uint64) addr);  // Alinear dirección a inicio de página
+    uint64 end_addr = (uint64) addr + len * PGSIZE;    // Dirección final de la región
+
+    for (uint64 a = addr_aligned; a < end_addr; a += PGSIZE) {
+        pte_t *pte = walk(myproc()->pagetable, a, 0);  // PTE sin crear una nueva
+        if (!pte || (*pte & PTE_V) == 0)  // Verificar que PTE es válida y esta presente
+            return -1;
+
+        *pte |= PTE_W;  // Activar el bit de escritura para lectura/escritura
+    }
+
+    sfence_vma();  // Recargar TLB en RISC-V
+    return 0;
 }

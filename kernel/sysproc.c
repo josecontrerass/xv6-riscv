@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "syscall.h" //se agrega
 
 uint64
 sys_exit(void)
@@ -108,4 +109,32 @@ uint64 sys_setboost(void) {
     argint(0, &pid);
     argint(1, &boost);
     return (uint64)set_boost(pid, boost);
+}
+
+//Declarar las nuevas funciones como externas
+extern int mprotect(void *addr, int len);
+extern int munprotect(void *addr, int len);
+
+
+
+
+// Adiciones para t3
+uint64 sys_mprotect(void) {
+    uint64 addr;
+    int len;
+
+    argaddr(0, &addr);  // Obtener el argumento sin esperar retorno
+    argint(1, &len);    // Obtener el segundo argumento sin esperar retorno
+
+    return mprotect((void*)addr, len);
+}
+
+uint64 sys_munprotect(void) {
+    uint64 addr;
+    int len;
+
+    argaddr(0, &addr);  // Obtener el argumento sin esperar retorno
+    argint(1, &len);    // Obtener el segundo argumento sin esperar retorno
+
+    return munprotect((void*)addr, len);
 }

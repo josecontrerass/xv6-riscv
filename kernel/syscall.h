@@ -22,3 +22,5 @@
 #define SYS_close  21
 #define SYS_setpriority 22
 #define SYS_setboost 23
+#define SYS_mprotect 24 //asignar numero a nuevas funciones
+#define SYS_munprotect 25 //nuevas funciones

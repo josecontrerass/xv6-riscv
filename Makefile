@@ -139,7 +139,8 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
-	$U/_testprogram   # Añadir esta línea para incluir testprog
+	$U/_testprogram\
+	$U/_mprotect_test   # Se añade esta línea para incluir mprotect_test
 
 
 fs.img: mkfs/mkfs README $(UPROGS)
