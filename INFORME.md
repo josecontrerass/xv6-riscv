@@ -1,152 +1,193 @@
-# **INFORME Tarea 3** María Josefa Contreras Vergara
-## Funcionamiento y Lógica de la Protección de Memoria
-El objetivo principal es implementar un sistema de protección de memoria en xv6 mediante dos nuevas llamadas al sistema: mprotect y munprotect. Estos permiten modificar los permisos de páginas específicas de la memoria de usuario, de manera que puedan ser marcadas como solo lectura o restauradas a su estado original.
--   mprotect(void *addr, int len): Esta función recibe una dirección addr y una longitud len, y cambia las páginas especificadas para ser de solo lectura. Es útil para proteger regiones de memoria de cambios accidentales, mejorando la seguridad y la estabilidad de los programas.
--   munprotect(void *addr, int len): Esta función deshace los efectos de mprotect, restaurando el permiso de escritura en las páginas especificadas. De esta manera, las páginas marcadas previamente como solo lectura pueden ser modificadas nuevamente.
+# **INFORME Tarea 4** María Josefa Contreras Vergara
+## Sistema de Permisos y Archivos Inmutables en xv6
+El objetivo principal de esta tarea fue extender el sistema de archivos de `xv6` para incluir un sistema de permisos básico y la capacidad de marcar archivos como inmutables, mediante la implementación de permisos básicos (lectura, escritura, inmutabilidad) para archivos. Esto involucró la creación de una nueva llamada al sistema `chmod`, la adaptación de las funciones existentes para respetar los permisos asignados a cada archivo y pruebas exhaustivas para garantizar la funcionalidad. En especifico, se modifica la estructura de los inodos, fueron añadidas validaciones en las funciones principales de manejo de archivos y se creó una nueva syscall. 
 
-### Lógica de Implementación, Lógica del sistema
--   Cada llamada toma una dirección y un número de páginas a modificar.
--   Se utiliza la función walk() en vm.c para recorrer la tabla de páginas del proceso y acceder a las entradas (PTE) de cada página.
--   Protección (mprotect): Se desactiva el bit PTE_W (escritura) de cada entrada de página para hacerla de solo lectura.
--   Desprotección (munprotect): Se reactiva el bit PTE_W de cada entrada de página para restaurar los permisos de escritura.
--   Se usa sfence_vma() en ambas funciones para asegurar que los cambios en la tabla de páginas se reflejen en la TLB, garantizando la coherencia en los permisos de memoria.
+### Lógica de Implementación, Lógica del sistema y Funcionamiento
+**Sistema de Permisos**
+Se implementó un sistema de permisos basado en bits, con los siguientes valores:
+-   0: Sin permisos.
+-   1: Solo lectura.
+-   2: Solo escritura.
+-   3: Lectura y escritura.
+-   5: Inmutable (solo lectura, no permite cambiar permisos).
+**Llamada al Sistema `chmod`:** Se creó una nueva syscall chmod(char *path, int mode) que permite cambiar los permisos de un archivo especificado. La lógica garantiza:
+-   Validación del modo o los argumentos: Si el modo es inválido (< 0 o > 5), la llamada falla.
+-   Archivos inmutables: No permite cambiar los permisos de archivos marcados como inmutables (perm == 5), esto mejora la seguridad y funcionalidad del sistema de las siguientes maneras, protege contra modificaciones accidentales y da un mayor control y eficiencia. 
+-   Actualización: Cambia el campo perm en el inodo y libera los recursos de forma segura, asegurando que los cambios se reflejen en el disco.
 
 ## Explicación de las modificaciones realizadas.
 
 1. **Modificación de archivos del núcleo (`kernel/`)**:
 
-    Se modificó archivos `proc.h`, `trap.c`, `vm.c`, `syscall.c`, `syscall.h` y `sysproc.c`.
+    Se modificó archivos `file.c`, `file.h`, `fs.c`, `fs.h`, `syscall.c`, `syscall.h` y `sysfile.c`.
 
-    - **Estructura de procesos (`proc.h`):** Se agrega declaraciones de campos `mprotect` y `munprotect` para que estén disponibles en otros archivos del kernel.
+    **a. Operaciones de archivos (`file.c`):** Se agrego elementos en las funciones fileread y filewrite, las cuales son fundamentales para las operaciones de lectura y escritura en los archivos. Estas funciones sirven como intermediarias entre el kernel y los programas de usuario para gestionar las operaciones de entrada/salida sobre archivos o dispositivos. 
 
+    `fileread`: Se añadió una validación para comprobar que el archivo tiene permisos de lectura antes de proceder con la operación. Si no tiene el permiso correspondiente, la función devuelve un error.
         ```c
-        int mprotect(void *addr, int len);
-        int munprotect(void *addr, int len);
+        if (!f->readable) {
+            return -1; // El archivo no tiene permisos de lectura
+        }
         ```
 
+        Este cambio evita accesos indebidos a archivos protegidos.
 
-    - **En sysproc.c, syscall.c, syscall.h:** Definen y registran las nuevas llamadas al sistema, se agregan llamadas al sistema. Ambas funciones fueron registradas en syscall.c y declaradas en syscall.h.
+    `filewrite`: Los cambios realizados tienen la finalidad de bloquear escrituras en archivos sin permisos de escritura (f->writable == 0) y proteger archivos marcados como inmutables (perm == 5). 
+        Se añadió lógica para validar permisos antes de permitir escritura o lectura.
 
-        - Se añade las entradas de las nuevas llamadas al sistema (SYS_mprotect y SYS_munprotect) en el arreglo syscalls. Esto permite que el kernel reconozca y redirija las llamadas mprotect y munprotect a sus respectivas funciones.
+        ```
+        if ((f->ip->perm & 2) == 0) {
+            return -1; // No tiene permiso de escritura
+        }
+        if (f->ip->perm == 5) {
+            printf("filewrite: No se permite escribir en un archivo inmutable\n");
+            return -1; // Archivo inmutable
+        }
+        ``` 
 
-        - Definiciones para las nuevas llamadas al sistema SYS_mprotect y SYS_munprotect en `syscall.h`. Para asignar un número único a cada nueva llamada al sistema, permitiendo al kernel identificar correctamente mprotect y munprotect.
+    **b. En sysfile.c, syscall.c, syscall.h:** Definen y registran las nuevas llamadas al sistema.
+
+        - Se añade las entradas de la nueva llamada al sistema (SYS_chmod) en el arreglo syscalls. Esto permite que el kernel reconozca y redirija la llamada a su respectiva función.
+
+        - Definiciones para la nueva llamada al sistema SYS_chmod en `syscall.h`. Para asignar un número único a la nueva llamada al sistema, permitiendo al kernel identificar correctamente.
         
-        - Adiciones en `sysproc.c`:
+        - Adiciones en `sysfile.c`:
 
-        Llamada `mprotect()`
+        1. Modificación de la función sys_open()
         ```
-        uint64 sys_mprotect(void) {
-            uint64 addr;
-            int len;
+        if ((ip->perm & 0x2) == 0 && (omode & O_WRONLY || omode & O_RDWR)) {
+            iunlockput(ip);
+            end_op();
+            return -1; // Error: No se permite la escritura
+        }
+        ```
+        2. Difinir sys_chmod(): extrae los argumentos desde el espacio de usuario y llama a chmod para ejecutar la operación.
+        ```
+        uint64 sys_chmod(void) {
+            char path[MAXPATH];
+            int mode;
 
-            argaddr(0, &addr);  // Obtener el argumento sin esperar retorno
-            argint(1, &len);    // Obtener el segundo argumento sin esperar retorno
-
-            return mprotect((void*)addr, len);
+            if (argstr(0, path, sizeof(path)) < 0)
+                return -1;
+            argint(1, &mode);
+            return chmod(path, mode);
         }
         ```
 
-        Llamada `numprotect()`
+
+        Propósito:
+        -   Verificar los permisos del archivo al momento de abrirlo.
+        -   Si el archivo no tiene el permiso de escritura (perm & 0x2), y el modo de apertura requiere escritura (O_WRONLY o O_RDWR), la operación falla.
+        -   Garantiza que no se puedan abrir archivos de solo lectura o inmutables para operaciones de escritura.
+
+        Las operaciones relacionadas con archivos, como sys_open, sys_write, y ahora sys_chmod, están centralizadas en `sysfile.c`, siguiendo la lógica modular de xv6.
+
+
+    **c. En fs.h:** La estructura de los inodos, definida en el archivo fs.h, se amplió para incluir un nuevo campo perm, que almacena los permisos asociados a cada archivo.
+
+        Cambio realizado:
         ```
-        uint64 sys_munprotect(void) {
-            uint64 addr;
-            int len;
-
-            argaddr(0, &addr);  // Obtener el argumento sin esperar retorno
-            argint(1, &len);    // Obtener el segundo argumento sin esperar retorno
-
-            return munprotect((void*)addr, len);
-        }
+        struct inode {
+            ...
+            int perm; // Nuevo campo para permisos: 0, 1, 2, 3, 5
+            ...
+        };
         ```
+        Inicialización: La función ialloc, que asigna nuevos inodos, fue modificada en fs.c para inicializar este campo con el valor 3, indicando que los archivos recién creados tienen permisos de lectura y escritura por defecto.
 
-        Las funciones sys_mprotect y sys_munprotect reciben la dirección y el tamaño de la memoria a proteger o desproteger y llaman a las funciones de memoria (mprotect y munprotect) implementadas en vm.c.
+        Se implementó la función chmod en fs.c, encargada de cambiar los permisos de un archivo. Esta función realiza las siguientes validaciones:
+        -   Verifica que el modo de permisos proporcionado sea válido.
+        -   Comprueba que el archivo no sea inmutable, en cuyo caso rechaza la solicitud.
+        -   Actualiza el campo perm en el inodo y asegura que los cambios se reflejen en disco mediante iupdate.
 
-    - **En trap.c:** Agrega manejo de errores para capturar violaciones de acceso y manejar adecuadamente intentos de escritura en memoria de solo lectura.
+        Además, las funciones relacionadas con la apertura y escritura de archivos, como sys_open y filewrite en file.c, fueron ajustadas para respetar estos permisos. Por ejemplo, si un archivo tiene permisos de solo lectura, no se permite abrirlo en modo escritura, y si tiene permisos inmutables, cualquier intento de modificación es bloqueado.
 
-        Se incluye código para capturar errores de protección de página, generando un mensaje que indica el PID del proceso que intentó escribir en una página de solo lectura. Esto permite al kernel detectar y reportar accesos ilegales, mostrando el PID y la dirección de memoria del intento de acceso. Además, da una mejor visualización en la imagen
-
-    - **En vm.c:** Toda la funcionalidad de protección de memoria para `mprotect` y `munprotect` se manejó en vm.c, donde reside la lógica de la administración de memoria.
-
-        Define las funciones de protección y desprotección de memoria, manejando la configuración de permisos de lectura y escritura. Estas funciones recorren la tabla de páginas del proceso para modificar los permisos de las páginas de memoria, activando o desactivando el bit de solo lectura (PTE_W).
+    **d. En fs.c:**  Implementación de la función chmod, se implementa su lógica para cambiar los permisos de archivos.
 
         ```
-        int mprotect(void *addr, int len) {
-            if (addr == 0 || len <= 0) return -1;  // Validación de argumentos
+        int chmod(char *path, int mode) {
+            struct inode *ip = 0;
 
-            uint64 addr_aligned = PGROUNDDOWN((uint64) addr);  // Alinear dirección al inicio de página
-            uint64 end_addr = (uint64) addr + len * PGSIZE;    // Dirección final de la región
-
-            for (uint64 a = addr_aligned; a < end_addr; a += PGSIZE) {
-                pte_t *pte = walk(myproc()->pagetable, a, 0);  // Obtén la PTE sin crear una nueva
-                if (!pte || (*pte & PTE_V) == 0)  // Verificar que PTE es válida y presente
-                    return -1;
-
-                *pte &= ~PTE_W;  // Desactivar el bit de escritura para solo lectura
+            if (mode < 0 || mode > MAX_PERM) {
+                end_op();
+                return -1;
             }
 
-            sfence_vma();  // Recargar TLB en RISC-V
-            return 0;
+            begin_op();
+            if ((ip = namei(path)) == 0) {
+                end_op();
+                return -1; // Archivo no encontrado
+            }
+
+            ilock(ip);
+            if (ip->perm == 5) { // Archivo inmutable
+                iunlockput(ip);
+                end_op();
+                return -1;
+            }
+
+            ip->perm = mode; // Cambiar permisos
+            iupdate(ip);     // Actualizar en disco
+            iunlockput(ip);
+            end_op();
+            return 0; // Éxito
         }
-        ```
-        ```
-        int munprotect(void *addr, int len) {
-            if (addr == 0 || len <= 0) return -1;  // Validación de argumentos
-            ...
-        }
+
         ```
 
-    `mprotect` desactiva el permiso de escritura para hacer que las páginas sean de solo lectura, mientras que `munprotect` restaura los permisos de escritura.
+    `chmod` Verifica que el modo sea válido y que el archivo no sea inmutable antes de realizar cambios.
 
-    - Agregar sfence_vma() en mprotect y munprotect es una medida preventiva y de seguridad que refresca los permisos de acceso en la TLB, evita accesos no autorizados según los permisos modificados y asegura que los cambios en la tabla de páginas se reflejan inmediatamente en el hardware. Esto se agrego debido a un error surgido en la ejecución. 
 
 2. **Modificación de archivos en carpeta de usuario y Programa de prueba en (`user/`)**
 
     - **En user.h** se agregó las declaraciones:
     ```
-    int mprotect(void *addr, int len);
-    int munprotect(void *addr, int len);
+    int chmod(char*, int);
     ```
 
-    - **Creación de programa de prueba `mprotect_test.c`:** Este programa verifica que `mprotect` y `munprotect` funcionen como se espera.
-        -   Reserva de Memoria: Usa sbrk para reservar una página.
-        -   Protección de Memoria: Se aplica mprotect para hacer la página de solo lectura.
-        -   Intento de Escritura: El programa intenta escribir en la página protegida, lo cual debería fallar.
-        -   Desprotección de Memoria: Con munprotect se restauraran los permisos de escritura.
-        -   Escritura Después de Desprotección: Se realiza una escritura que debería tener éxito después de la desprotección.
+    - **Creación de programa de prueba `chmod_prueba.c`:** para validar las funcionalidades implementadas:
+        -   Crear un archivo y escribir datos en él.
+        -   Cambiar los permisos a solo lectura y verificar que no se pueda escribir.
+        -   Cambia los permisos a inmutable y verificar que no se puedan modificar ni los datos ni los permisos.
+    Las pruebas aseguran que los permisos sean respetados en todas las operaciones críticas del sistema de archivos.
 
 3. **Modificación en Makefile de (`xv6-riscv/`):**
-    - Se añadió el archivo `mprotect_test.c` en el Makefile para compilarlo como parte del sistema y hacer que esté disponible en la imagen de xv6.
+    - Se añadió el archivo `chmod_prueba.c` ($U/_chmod_prueba) en el Makefile para compilarlo como parte del sistema y hacer que esté disponible en la imagen de xv6.
 
 ## Dificultades encontradas y cómo se resolvieron.
 
-1. **Conflicto con Makefile:** Al agregar las nuevas llamadas al sistema y el programa de prueba, fue necesario modificar el Makefile para compilar correctamente los programas de usuario. Se añadió el nuevo programa testprogram a las reglas del Makefile nuevamente, pues se habia cometido un error. 
+1. **Restricciones de Permisos:** Se ajustó la lógica para garantizar que los archivos inmutables no puedan ser modificados ni reconfigurados.
 
-2. **Modificación de PTE:** La manipulación de permisos en las PTE puede ser compleja; se ajustaron los bits de escritura. 
+2. **Pruebas en el Espacio de Usuario:** Diseñar casos de prueba para cubrir todas las combinaciones de permisos (lectura, escritura, inmutabilidad).
 
-3. **Captura de Errores:** Fue necesario añadir en `trap.c` un manejo específico para detectar violaciones de permisos de página.
-    
-    El mensaje obtenido por consola al ejecutar el programa:
+3. **Problemas con la estructura dinode:** Inicialmente, el campo perm fue añadido directamente a la estructura dinode en el archivo fs.h. Esto provocó un error relacionado con el tamaño de la estructura dinode y la alineación de los bloques de disco en xv6. El mensaje de error fue:
+
     ```
-    usertrap(): unexpected scause 0xf pid=3
-            sepc=0x54 stval=0x4000
+    mkfs: mkfs.c:90: main: Assertion `(BSIZE % sizeof(struct dinode)) == 0' failed.
     ```
-4. **Importación de archivos necesarios:** En `vm.c` se incluye "spinlock.h" para la corrección de errores arrojados por consola e incluye "proc.h", con la finalidad de poder utilizar elementos como PGROUNDDOWN o PGSIZE. 
+El problema se debió a que el tamaño de la estructura dinode ya no se ajustaba correctamente al tamaño de bloque (BSIZE), violando una de las suposiciones fundamentales del sistema de archivos en xv6. Para resolver esto, el campo perm fue trasladado a la estructura inode, donde desde un inicio debia estar y que se maneja únicamente en memoria, evitando así modificar el diseño en disco y los problemas de alineación.
+
+4. **Errores en el Makefile:** Resolver problemas de compilación al integrar el programa de prueba.
 
 ## Comandos de ejecución dentro de QEMU:
 
 - Para probar y ejecutar el programa de prueba:
 
     ```
-    $ mprotect_test
+    $ chmod_prueba
 
     ```
-- Salida esperada: Al intentar escribir en una página protegida, se muestra un mensaje de error similar a
-    ```
-    Memoria asignada en la dirección 0x0000000000004000
-    mprotect exitoso: la página es de solo lectura.
-    Intentando escribir en la página protegida...
-    ```
+- Salida esperada: Se muestra un mensaje detallado con los intentos de cambio de permiso, escritura. 
 
     ```
-    "Intento de escritura en página de solo lectura. PID=[PID del proceso]".
+    Creado archivo: testfile
+    Permisos cambiados a solo lectura
+    Intentando abrir en modo escritura (esperando fallo)...
+    Bloqueo de escritura verificado correctamente
+    Permisos restaurados exitosamente
+    Permisos cambiados a inmutable
+    Bloqueo de cambio de permisos desde inmutable verificado
+    Intentando abrir archivo inmutable en modo escritura...
+    Bloqueo de escritura para archivo inmutable verificado
+    Pruebas completadas con éxito
     ```
