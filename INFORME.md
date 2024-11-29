@@ -50,13 +50,13 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
 
     **b. En sysfile.c, syscall.c, syscall.h:** Definen y registran las nuevas llamadas al sistema.
 
-        - Se añade las entradas de la nueva llamada al sistema (SYS_chmod) en el arreglo syscalls. Esto permite que el kernel reconozca y redirija la llamada a su respectiva función.
+    - Se añade las entradas de la nueva llamada al sistema (SYS_chmod) en el arreglo syscalls. Esto permite que el kernel reconozca y redirija la llamada a su respectiva función.
 
-        - Definiciones para la nueva llamada al sistema SYS_chmod en `syscall.h`. Para asignar un número único a la nueva llamada al sistema, permitiendo al kernel identificar correctamente.
-        
-        - Adiciones en `sysfile.c`:
+    - Definiciones para la nueva llamada al sistema SYS_chmod en `syscall.h`. Para asignar un número único a la nueva llamada al sistema, permitiendo al kernel identificar correctamente.
+    
+    - Adiciones en `sysfile.c`:
 
-        1. Modificación de la función sys_open()
+    1. Modificación de la función sys_open()
 
         ```
         if ((ip->perm & 0x2) == 0 && (omode & O_WRONLY || omode & O_RDWR)) {
@@ -66,7 +66,7 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
         }
         ```
 
-        2. Difinir sys_chmod(): extrae los argumentos desde el espacio de usuario y llama a chmod para ejecutar la operación.
+    2. Difinir sys_chmod(): extrae los argumentos desde el espacio de usuario y llama a chmod para ejecutar la operación.
 
         ```
         uint64 sys_chmod(void) {
@@ -80,17 +80,17 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
         }
         ```
 
-        Propósito:
-        -   Verificar los permisos del archivo al momento de abrirlo.
-        -   Si el archivo no tiene el permiso de escritura (perm & 0x2), y el modo de apertura requiere escritura (O_WRONLY o O_RDWR), la operación falla.
-        -   Garantiza que no se puedan abrir archivos de solo lectura o inmutables para operaciones de escritura.
+    Propósito:
+    -   Verificar los permisos del archivo al momento de abrirlo.
+    -   Si el archivo no tiene el permiso de escritura (perm & 0x2), y el modo de apertura requiere escritura (O_WRONLY o O_RDWR), la operación falla.
+    -   Garantiza que no se puedan abrir archivos de solo lectura o inmutables para operaciones de escritura.
 
     Las operaciones relacionadas con archivos, como sys_open, sys_write, y ahora sys_chmod, están centralizadas en `sysfile.c`, siguiendo la lógica modular de xv6.
 
 
     **c. En fs.h:** La estructura de los inodos, definida en el archivo fs.h, se amplió para incluir un nuevo campo perm, que almacena los permisos asociados a cada archivo.
 
-        Cambio realizado:
+    Cambio realizado:
 
         ```
         struct inode {
@@ -148,7 +148,7 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
 2. **Modificación de archivos en carpeta de usuario y Programa de prueba en (`user/`)**
 
     - **En user.h** se agregó las declaraciones:
-    
+
     ```
     int chmod(char*, int);
     ```
