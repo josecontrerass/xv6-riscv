@@ -110,7 +110,10 @@ fileread(struct file *f, uint64 addr, int n)
 
   if(f->readable == 0)
     return -1;
-
+  if (f->ip == 0 || (f->ip->perm & 1) == 0) {
+    printf("fileread: No tiene permiso de lectura o inode no válido\n");
+    return -1; // No tiene permiso de lectura
+  }
   if(f->type == FD_PIPE){
     r = piperead(f->pipe, addr, n);
   } else if(f->type == FD_DEVICE){
@@ -138,7 +141,13 @@ filewrite(struct file *f, uint64 addr, int n)
 
   if(f->writable == 0)
     return -1;
-
+  if ((f->ip->perm & 2) == 0) {
+    return -1; // No tiene permiso de escritura
+  }
+  if (f->ip->perm == 5) {
+    printf("filewrite: No se permite escribir en un archivo inmutable\n");
+    return -1; // Archivo inmutable
+  }
   if(f->type == FD_PIPE){
     ret = pipewrite(f->pipe, addr, n);
   } else if(f->type == FD_DEVICE){

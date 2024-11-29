@@ -12,6 +12,8 @@ struct file {
 #define major(dev)  ((dev) >> 16 & 0xFFFF)
 #define minor(dev)  ((dev) & 0xFFFF)
 #define	mkdev(m,n)  ((uint)((m)<<16| (n)))
+#define NDIRECT 12
+
 
 // in-memory copy of an inode
 struct inode {
@@ -27,6 +29,9 @@ struct inode {
   short nlink;
   uint size;
   uint addrs[NDIRECT+1];
+  
+  int perm;           // Permisos: 0 (no acceso), 1 (lectura), 2 (escritura), 3 (lectura/escritura), 5 (inmutable)
+
 };
 
 // map major device number to device functions.

@@ -40,3 +40,4 @@ entry("setpriority");
 entry("setboost");
 entry("mprotect");
 entry("munprotect");
+entry("chmod");

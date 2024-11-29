@@ -29,6 +29,9 @@ int setboost(int pid, int boost);
 int mprotect(void *addr, int len);
 int munprotect(void *addr, int len);
 
+//tarea 4
+int chmod(char*, int);
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
@@ -47,3 +50,4 @@ void *memcpy(void *, const void *, uint);
 // umalloc.c
 void* malloc(uint);
 void free(void*);
+

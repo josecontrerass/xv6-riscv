@@ -4,6 +4,8 @@
 
 #define ROOTINO  1   // root i-number
 #define BSIZE 1024  // block size
+#define MAX_PERM 7 // Permisos binarios: 111 (lectura, escritura, ejecución)
+
 
 // Disk layout:
 // [ boot block | super block | log | inode blocks |
@@ -36,6 +38,9 @@ struct dinode {
   short nlink;          // Number of links to inode in file system
   uint size;            // Size of file (bytes)
   uint addrs[NDIRECT+1];   // Data block addresses
+
+  //uint perm;     Permisos 1 byte
+
 };
 
 // Inodes per block.

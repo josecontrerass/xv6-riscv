@@ -328,6 +328,11 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
+    if ((ip->perm & 0x2) == 0 && (omode & O_WRONLY || omode & O_RDWR)) {
+      iunlockput(ip);
+      end_op();
+      return -1; // Error: No se permite la escritura
+    }
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -502,4 +507,23 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+extern int chmod(char *path, int mode);
+
+uint64
+sys_chmod(void)
+{
+    char path[MAXPATH];
+    int mode;
+
+    // Extraer y verificar el primer argumento
+    if (argstr(0, path, sizeof(path)) < 0)
+        return -1;
+
+    // Extraer el segundo argumento (no se necesita comparar el valor de retorno)
+    argint(1, &mode);
+
+    // Llamar a la función chmod con los argumentos extraídos
+    return chmod(path, mode);
 }
