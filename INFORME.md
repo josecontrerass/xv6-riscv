@@ -10,6 +10,7 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
 -   2: Solo escritura.
 -   3: Lectura y escritura.
 -   5: Inmutable (solo lectura, no permite cambiar permisos).
+
 **Llamada al Sistema `chmod`:** Se creó una nueva syscall chmod(char *path, int mode) que permite cambiar los permisos de un archivo especificado. La lógica garantiza:
 -   Validación del modo o los argumentos: Si el modo es inválido (< 0 o > 5), la llamada falla.
 -   Archivos inmutables: No permite cambiar los permisos de archivos marcados como inmutables (perm == 5), esto mejora la seguridad y funcionalidad del sistema de las siguientes maneras, protege contra modificaciones accidentales y da un mayor control y eficiencia. 
@@ -24,15 +25,17 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
     **a. Operaciones de archivos (`file.c`):** Se agrego elementos en las funciones fileread y filewrite, las cuales son fundamentales para las operaciones de lectura y escritura en los archivos. Estas funciones sirven como intermediarias entre el kernel y los programas de usuario para gestionar las operaciones de entrada/salida sobre archivos o dispositivos. 
 
     `fileread`: Se añadió una validación para comprobar que el archivo tiene permisos de lectura antes de proceder con la operación. Si no tiene el permiso correspondiente, la función devuelve un error.
+        
         ```c
         if (!f->readable) {
             return -1; // El archivo no tiene permisos de lectura
         }
         ```
 
-        Este cambio evita accesos indebidos a archivos protegidos.
+    Este cambio evita accesos indebidos a archivos protegidos.
 
     `filewrite`: Los cambios realizados tienen la finalidad de bloquear escrituras en archivos sin permisos de escritura (f->writable == 0) y proteger archivos marcados como inmutables (perm == 5). 
+        
         Se añadió lógica para validar permisos antes de permitir escritura o lectura.
 
         ```
@@ -54,6 +57,7 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
         - Adiciones en `sysfile.c`:
 
         1. Modificación de la función sys_open()
+
         ```
         if ((ip->perm & 0x2) == 0 && (omode & O_WRONLY || omode & O_RDWR)) {
             iunlockput(ip);
@@ -61,7 +65,9 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
             return -1; // Error: No se permite la escritura
         }
         ```
+
         2. Difinir sys_chmod(): extrae los argumentos desde el espacio de usuario y llama a chmod para ejecutar la operación.
+
         ```
         uint64 sys_chmod(void) {
             char path[MAXPATH];
@@ -74,18 +80,18 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
         }
         ```
 
-
         Propósito:
         -   Verificar los permisos del archivo al momento de abrirlo.
         -   Si el archivo no tiene el permiso de escritura (perm & 0x2), y el modo de apertura requiere escritura (O_WRONLY o O_RDWR), la operación falla.
         -   Garantiza que no se puedan abrir archivos de solo lectura o inmutables para operaciones de escritura.
 
-        Las operaciones relacionadas con archivos, como sys_open, sys_write, y ahora sys_chmod, están centralizadas en `sysfile.c`, siguiendo la lógica modular de xv6.
+    Las operaciones relacionadas con archivos, como sys_open, sys_write, y ahora sys_chmod, están centralizadas en `sysfile.c`, siguiendo la lógica modular de xv6.
 
 
     **c. En fs.h:** La estructura de los inodos, definida en el archivo fs.h, se amplió para incluir un nuevo campo perm, que almacena los permisos asociados a cada archivo.
 
         Cambio realizado:
+
         ```
         struct inode {
             ...
@@ -93,14 +99,15 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
             ...
         };
         ```
-        Inicialización: La función ialloc, que asigna nuevos inodos, fue modificada en fs.c para inicializar este campo con el valor 3, indicando que los archivos recién creados tienen permisos de lectura y escritura por defecto.
 
-        Se implementó la función chmod en fs.c, encargada de cambiar los permisos de un archivo. Esta función realiza las siguientes validaciones:
-        -   Verifica que el modo de permisos proporcionado sea válido.
-        -   Comprueba que el archivo no sea inmutable, en cuyo caso rechaza la solicitud.
-        -   Actualiza el campo perm en el inodo y asegura que los cambios se reflejen en disco mediante iupdate.
+    Inicialización: La función ialloc, que asigna nuevos inodos, fue modificada en fs.c para inicializar este campo con el valor 3, indicando que los archivos recién creados tienen permisos de lectura y escritura por defecto.
 
-        Además, las funciones relacionadas con la apertura y escritura de archivos, como sys_open y filewrite en file.c, fueron ajustadas para respetar estos permisos. Por ejemplo, si un archivo tiene permisos de solo lectura, no se permite abrirlo en modo escritura, y si tiene permisos inmutables, cualquier intento de modificación es bloqueado.
+    Se implementó la función chmod en fs.c, encargada de cambiar los permisos de un archivo. Esta función realiza las siguientes validaciones:
+    -   Verifica que el modo de permisos proporcionado sea válido.
+    -   Comprueba que el archivo no sea inmutable, en cuyo caso rechaza la solicitud.
+    -   Actualiza el campo perm en el inodo y asegura que los cambios se reflejen en disco mediante iupdate.
+
+    Además, las funciones relacionadas con la apertura y escritura de archivos, como sys_open y filewrite en file.c, fueron ajustadas para respetar estos permisos. Por ejemplo, si un archivo tiene permisos de solo lectura, no se permite abrirlo en modo escritura, y si tiene permisos inmutables, cualquier intento de modificación es bloqueado.
 
     **d. En fs.c:**  Implementación de la función chmod, se implementa su lógica para cambiar los permisos de archivos.
 
@@ -141,6 +148,7 @@ Se implementó un sistema de permisos basado en bits, con los siguientes valores
 2. **Modificación de archivos en carpeta de usuario y Programa de prueba en (`user/`)**
 
     - **En user.h** se agregó las declaraciones:
+    
     ```
     int chmod(char*, int);
     ```
